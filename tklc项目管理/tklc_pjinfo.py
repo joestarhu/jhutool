@@ -1,25 +1,24 @@
 #! /usr/bin/env python3
-import numpy as np
 import pandas as pd
 from datetime import datetime,timedelta
 
-EXCEL_PATH = r'/Users/jhu/code/pytools/DailyReport/pjinfo.xlsx' #Excel文档地址
-
+EXCEL_PATH = '/Users/jhu/Downloads/tklc.xlsx'
 class ExlCfg:
     # Sheet相关
     SHT_PJINF:str       = 'pjinfo'
-    SHT_CITYLIST:str    ='citylist'
+    SHT_CITYLIST:str    = 'citylist'
 
     # 列名相关
-    COL_STS:str = '状态'
-    COL_KO:str  = '立项'
-    COL_DT:str  = 'DT'
-    COL_PJTYPE:str  = '项目类型'
-    COL_WORKHOUR:str= '月detail' # 月份需要拼接
+    COL_STS:str         = '状态'
+    COL_KO:str          = '立项'
+    COL_DT:str          = 'DT'
+    COL_PJTYPE:str      = '项目类型'
+    COL_WORKHOUR:str    = '月detail' # 月份需要拼接
+    COL_WORKHOUR_TOTAL:str    = '月total' # 月份需要拼接,每个月的总工时
 
     ## 里程碑需要拼接
-    COL_MSPLAN = '计划'
-    COL_MSACT = '实际'
+    COL_MSPLAN  = '计划'
+    COL_MSACT   = '实际'
     COL_MSDELAY = '延期'
 
     # 初始化的时候自行追加的列，非原始数据
@@ -74,8 +73,8 @@ class PJinfo:
             delay = ms + ExlCfg.COL_MSDELAY
 
             # 找出非日程的row(即这些日程是尚未确定或完成)
-            plmsk  = df[plan].isin(ExlCfg.SCH_VAL)
-            actmsk = df[act].isin(ExlCfg.SCH_VAL)
+            plmsk  = df[plan].apply(str).isin(ExlCfg.SCH_VAL)
+            actmsk = df[act].apply(str).isin(ExlCfg.SCH_VAL)
 
             # 计算计划完成日
             mask = ~plmsk
@@ -85,9 +84,19 @@ class PJinfo:
             mask = (df[ExlCfg.COL_STS] == ExlCfg.STS_DONE) & (~actmsk)
             df.loc[mask,ExlCfg.COL_END_ACT] = df.loc[mask,act]
 
-            # 计算里程碑延期日 (用于里程碑的准时率)
-            mask = ~(plmsk | actmsk)
-            df.loc[mask,delay] = df.loc[mask,act] - df.loc[mask,plan]
+        # 格式化日期
+        def month_total_get(val):
+            hour = 0.
+            if pd.isnull(val): return hour
+            for data in val.split(' '):
+                hour += float(data.split(':')[1])
+            return hour
+
+        # 计算各个项目每个月的工时
+        for month in range(1,13):
+            col_hour = f'{month}{ExlCfg.COL_WORKHOUR}'
+            col_total = f'{month}{ExlCfg.COL_WORKHOUR_TOTAL}'
+            df[col_total] = df[col_hour].apply(month_total_get)
 
         self.__df = df
 
@@ -123,24 +132,11 @@ class PJinfo:
         df = self.__df
         pjhour = {}
         for month in range(1,13):
-            hour = 0.
-            col_hour = f'{month}{ExlCfg.COL_WORKHOUR}'
-
-            # 如果未找到工时详细列
-            if col_hour not in df.columns:
-                pjhour[month] = hour
-                continue
-
-            for val in df[col_hour]:
-                if pd.isnull(val):
-                    continue
-
-                for data in val.split(' '):
-                    hour += float(data.split(':')[1])
-            pjhour[month] = hour
+            col_total = f'{month}{ExlCfg.COL_WORKHOUR_TOTAL}'
+            pjhour[month] = df[col_total].sum()
         return pjhour
 
-    def pjres_get(self,periods=30) ->pd.DataFrame:
+    def pjres_get(self,periods=30,name=None) ->pd.DataFrame:
         '''获取项目资源的使用情况'''
         df = self.__df
 
@@ -174,9 +170,15 @@ class PJinfo:
                 else:
                     pjres.loc[msk,m] = 1.
         pjres.fillna(0,inplace=True)
+
+        if name in pjres.columns:
+            pjres = pjres[name]
+
         pjres = pjres.T
         return pjres
 
 if __name__ == '__main__':
     p = PJinfo()
-    d = p.pjres_get(10)
+    p.pjres_get(10)
+    p.pjhour_get()
+
