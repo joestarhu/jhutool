@@ -8,11 +8,30 @@ class ExlCfg:
     SHT_PJINF:str       = 'pjinfo'
     SHT_CITYLIST:str    = 'citylist'
 
-    # 列名相关
-    COL_STS:str         = '状态'
+    # 列名和其可用值
+    COL_STS:str = '状态'
+    STS_DOING   = '进行'
+    STS_DELAY   = '延迟'
+    STS_WAIT    = '等待'
+    STS_DONE    = '完成'
+    STS_VAL     = (STS_DOING,STS_DELAY,STS_WAIT,STS_DONE)
+
+    COL_BUS:str     = '业务线'
+    BUS_QR:str      = '扫码业务'
+    BUS_OPE:str     = '运营业务'
+    BUS_TEMP:str    = '临时需求'
+    BUS_VAL         = (BUS_QR,BUS_OPE,BUS_TEMP)
+
     COL_KO:str          = '立项'
     COL_DT:str          = 'DT'
-    COL_PJTYPE:str      = '项目类型'
+
+    COL_PJTYPE:str  = '项目类型'
+    PJTYPE_NORMAL   = '常规'
+    PJTYPE_UPGRADE  = '优化'
+    PJTYPE_FIX      = '修复'
+    PJTYPE_ABORT    = '终止'
+    PJTYPE_VAL      = (PJTYPE_NORMAL,PJTYPE_UPGRADE,PJTYPE_FIX,PJTYPE_ABORT)
+
     COL_WORKHOUR:str    = '月detail' # 月份需要拼接
     COL_WORKHOUR_TOTAL:str    = '月total' # 月份需要拼接,每个月的总工时
 
@@ -20,25 +39,6 @@ class ExlCfg:
     COL_MSPLAN  = '计划'
     COL_MSACT   = '实际'
     COL_MSDELAY = '延期'
-
-    # 初始化的时候自行追加的列，非原始数据
-    COL_END_PLAN:str =  '计划完结'
-    COL_END_ACT:str  =  '实际完结'
-
-    # 列的可用值
-    ## 状态
-    STS_DOING   = '进行'
-    STS_DELAY   = '延迟'
-    STS_WAIT    = '等待'
-    STS_DONE    = '完成'
-    STS_VAL     = (STS_DOING,STS_DELAY,STS_WAIT,STS_DONE)
-
-    ## 项目类型
-    PJTYPE_NORMAL   = '常规'
-    PJTYPE_UPGRADE  = '优化'
-    PJTYPE_FIX      = '修复'
-    PJTYPE_ABORT    = '终止'
-    PJTYPE_VAL      = (PJTYPE_NORMAL,PJTYPE_UPGRADE,PJTYPE_FIX,PJTYPE_ABORT)
 
     ## 里程碑
     MS_PC = 'PC'
@@ -56,6 +56,9 @@ class ExlCfg:
     SCH_WAIT    = 'wait'
     SCH_VAL     = (SCH_UNDEF,SCH_TBD,SCH_TODO,SCH_DOING,SCH_WAIT)
 
+    # 初始化的时候自行追加的列，非原始数据
+    COL_END_PLAN:str =  '计划完结'
+    COL_END_ACT:str  =  '实际完结'
 
 class PJinfo:
     def __init__(self,path=EXCEL_PATH):
@@ -92,7 +95,7 @@ class PJinfo:
                 hour += float(data.split(':')[1])
             return hour
 
-        # 计算各个项目每个月的工时
+        # 计算各项目每月的工时
         for month in range(1,13):
             col_hour = f'{month}{ExlCfg.COL_WORKHOUR}'
             col_total = f'{month}{ExlCfg.COL_WORKHOUR_TOTAL}'
@@ -127,14 +130,41 @@ class PJinfo:
                 pjtype.loc[month,type] = cnt
         return pjtype
 
-    def pjhour_get(self) ->dict:
-        '''获取每月项目的完成工时'''
+
+    def pjhour_get(self) -> pd.DataFrame:
+        """
+        获取每个月项目的完成工时间
+        输出结果如下:
+        月份 扫码业务    运营业务    临时需求    合计
+        ----------------------------------------
+        1:  1000       2000       3000      6000
+        ...
+        12: 1000       2000       3000      6000
+        """
+        # 构建列
         df = self.__df
-        pjhour = {}
-        for month in range(1,13):
-            col_total = f'{month}{ExlCfg.COL_WORKHOUR_TOTAL}'
-            pjhour[month] = df[col_total].sum()
-        return pjhour
+        col_list = ['月份','合计']
+        col_list.extend(ExlCfg.BUS_VAL)
+
+        # 初始化数据
+        df_pjhour = pd.DataFrame(columns=col_list)
+        df_pjhour['月份'] = range(1,13)
+        df_pjhour = df_pjhour.fillna(0.)
+
+        # 获取各个业务线的mask
+        mask_bus = [df[ExlCfg.COL_BUS] == val for val in ExlCfg.BUS_VAL]
+
+        # 填充数据
+        for i in range(len(mask_bus)):
+            for m in range(1,13):
+                df_pjhour.loc[m-1,ExlCfg.BUS_VAL[i]] = df.loc[mask_bus[i],f'{m}月total'].sum()
+
+        # 合计数值
+        for val in ExlCfg.BUS_VAL:
+            df_pjhour['合计'] += df_pjhour[val]
+
+        return df_pjhour
+
 
     def pjres_get(self,periods=30,name=None) ->pd.DataFrame:
         '''获取项目资源的使用情况'''
@@ -179,6 +209,6 @@ class PJinfo:
 
 if __name__ == '__main__':
     p = PJinfo()
-    p.pjres_get(10)
-    p.pjhour_get()
-
+    # p.pjhour_get()
+    df = p.pjinfo_get()
+    df = p.pjhour_get()
