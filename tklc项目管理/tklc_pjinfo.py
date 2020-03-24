@@ -1,3 +1,10 @@
+"""
+Author:Jian.Hu
+
+--2020.03.24-------------------------------------------------
+1) 初始化数据的时候,追加每个项目的总工时
+"""
+
 #! /usr/bin/env python3
 import pandas as pd
 from datetime import datetime,timedelta
@@ -32,8 +39,9 @@ class ExlCfg:
     PJTYPE_ABORT    = '终止'
     PJTYPE_VAL      = (PJTYPE_NORMAL,PJTYPE_UPGRADE,PJTYPE_FIX,PJTYPE_ABORT)
 
-    COL_WORKHOUR:str    = '月detail' # 月份需要拼接
-    COL_WORKHOUR_TOTAL:str    = '月total' # 月份需要拼接,每个月的总工时
+    COL_WORKHOUR        :str = '月detail' # 月份需要拼接
+    COL_WORKHOUR_TOTAL  :str = '月total' # 月份需要拼接,每个月的总工时
+    COL_WORKHOUR_ALL    :str ='总工时' # 项目总工时
 
     ## 里程碑需要拼接
     COL_MSPLAN  = '计划'
@@ -95,11 +103,13 @@ class PJinfo:
                 hour += float(data.split(':')[1])
             return hour
 
-        # 计算各项目每月的工时
+        # 计算各项目每月的工时和项目总工时
+        df[ExlCfg.COL_WORKHOUR_ALL] = 0.
         for month in range(1,13):
             col_hour = f'{month}{ExlCfg.COL_WORKHOUR}'
             col_total = f'{month}{ExlCfg.COL_WORKHOUR_TOTAL}'
             df[col_total] = df[col_hour].apply(month_total_get)
+            df[ExlCfg.COL_WORKHOUR_ALL] += df[col_total]
 
         self.__df = df
 
@@ -129,7 +139,6 @@ class PJinfo:
                 cnt = m_df[m_df[ExlCfg.COL_PJTYPE] == type].shape[0]
                 pjtype.loc[month,type] = cnt
         return pjtype
-
 
     def pjhour_get(self) -> pd.DataFrame:
         """
@@ -164,7 +173,6 @@ class PJinfo:
             df_pjhour['合计'] += df_pjhour[val]
 
         return df_pjhour
-
 
     def pjres_get(self,periods=30,name=None) ->pd.DataFrame:
         '''获取项目资源的使用情况'''
@@ -209,6 +217,5 @@ class PJinfo:
 
 if __name__ == '__main__':
     p = PJinfo()
-    # p.pjhour_get()
-    df = p.pjinfo_get()
+    info = p.pjinfo_get()
     df = p.pjhour_get()
