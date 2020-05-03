@@ -1,5 +1,8 @@
+#! /usr/bin/env python3
 """
 Author:Jian.Hu
+--2020.04.30-------------------------------------------------
+1) 追加每个月每位成员的投入工时数量
 
 --2020.03.24-------------------------------------------------
 1) 初始化数据的时候,追加每个项目的总工时
@@ -7,7 +10,16 @@ Author:Jian.Hu
 
 #! /usr/bin/env python3
 import pandas as pd
+import numpy as np
 from datetime import datetime,timedelta
+import matplotlib.pyplot as plt
+from pyecharts.charts import Bar
+import re
+from pyecharts import options as opts
+from pyecharts.globals import ThemeType
+from pyecharts.commons.utils import JsCode
+
+
 
 EXCEL_PATH = '/Users/jhu/Downloads/tklc.xlsx'
 class ExlCfg:
@@ -174,6 +186,29 @@ class PJinfo:
 
         return df_pjhour
 
+
+    def member_workhour_get(self)->dict:
+        """
+        获取每月各位成员的工时
+        """
+        df = self.__df
+
+        df_dict = {}
+        for i in range(1,13):
+            feat = f'{i}月detail'
+            month = df[feat].dropna()
+            d = {}
+            for val in month:
+                for valset in re.findall('\w*:\d*',val):
+                    name_hour =  re.split(':',valset)
+                    name = name_hour[0]
+                    hour = int(name_hour[1])
+                    d[name] = d.get(name,0) + hour
+                month_df = pd.DataFrame([d.values()],columns=d.keys())
+                df_dict[i] = month_df
+        return df_dict
+
+
     def pjres_get(self,periods=30,name=None) ->pd.DataFrame:
         '''获取项目资源的使用情况'''
         df = self.__df
@@ -217,5 +252,10 @@ class PJinfo:
 
 if __name__ == '__main__':
     p = PJinfo()
-    info = p.pjinfo_get()
-    df = p.pjhour_get()
+    df = p.pjinfo_get()
+    pjtype = p.pjytpe_get()
+    pjtype
+
+    hour = p.pjhour_get()
+    m = p.member_workhour_get()
+
