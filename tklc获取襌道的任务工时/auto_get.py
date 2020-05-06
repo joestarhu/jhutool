@@ -11,7 +11,7 @@ def cookies_jar_get():
     driver = webdriver.Chrome(executable_path='/Users/jhu/Downloads/chromedriver')
     driver.get("http://zbox.unservice.net/zentao/my/")
     driver.find_element_by_id("account").send_keys('huj')
-    driver.find_element_by_name("password").send_keys('qwe321')
+    driver.find_element_by_name("password").send_keys('******')
     driver.find_element_by_id("submit").click()
     cookies = driver.get_cookies()
     driver.quit()
