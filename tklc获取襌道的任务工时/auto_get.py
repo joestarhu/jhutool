@@ -1,17 +1,39 @@
 #!/usr/bin/env python3
+"""
+---2020.05.12------------------
+1). 采用Requests的方式直接登录获取cookie.
+2). 这样不用selenium依赖浏览器的版本了
+3). 也无须再次存储cookies的信息了,每次都登录
+"""
+
+
 import pandas as pd
 import requests
 import json
 from selenium import webdriver
 from lxml import etree
 import sys
+ZENDAO_NAME='huj'
+ZENDAO_PWD='******'
+
 cookies_file = 'zendaocook.json'
+
+dict_url = {
+    '扫码日常':'http://zbox.unservice.net/zentao/project-task-117-byModule-1175.html',
+    '支付日常':'http://zbox.unservice.net/zentao/project-task-117-byModule-1176.html',
+    '数据日常':'http://zbox.unservice.net/zentao/project-task-116-byModule-1177.html',
+    '临时需求':'http://zbox.unservice.net/zentao/project-task-88-unclosed.html',
+    # 通用
+    '埋点v4.1':'http://zbox.unservice.net/zentao/project-task-116-byModule-1221.html',
+    '无资金券':'http://zbox.unservice.net/zentao/project-task-117-byModule-1217.html',
+    '周期卡v1.2':'http://zbox.unservice.net/zentao/project-task-117-byModule-1215.html',
+}
 
 def cookies_jar_get():
     driver = webdriver.Chrome(executable_path='/Users/jhu/Downloads/chromedriver')
     driver.get("http://zbox.unservice.net/zentao/my/")
-    driver.find_element_by_id("account").send_keys('huj')
-    driver.find_element_by_name("password").send_keys('******')
+    driver.find_element_by_id("account").send_keys(ZENDAO_NAME)
+    driver.find_element_by_name("password").send_keys(ZENDAO_PWD)
     driver.find_element_by_id("submit").click()
     cookies = driver.get_cookies()
     driver.quit()
@@ -27,9 +49,8 @@ def login_zendao():
         try:
             with open(cookies_file,'r') as f:
                 cks=json.loads(f.read())
-
             for c in cks:
-                jar.set(c['name'],c['value'])
+               jar.set(c['name'],c['value'])
         except:
             cookies_jar_get()
             retry_times -= 1
@@ -45,9 +66,13 @@ def login_zendao():
             break
     return jar
 
-if __name__ == '__main__':
-    url = sys.argv[1]
-    jar = login_zendao()
+def login_zendao_req():
+    s = requests.session()
+    data = {'account':ZENDAO_NAME,'password':ZENDAO_PWD}
+    res = s.post('http://zbox.unservice.net/zentao/user-login.html',data)
+    return res.cookies
+
+def workhour_get(url,cookies):
     req_head={
         "User-Agent":"Mozilla/5.0· (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
     }
@@ -68,5 +93,16 @@ if __name__ == '__main__':
 
     msg = ''
     for v in d:
+        # 不需要已经结束的工时任务了
+        if v == 'Closed':continue
         msg += f'{v}:{d[v]} '
-    print(msg,end='\n')
+    return msg
+
+if __name__ == '__main__':
+    # jar = login_zendao()
+    jar = login_zendao_req()
+
+    for k in dict_url:
+        url = dict_url[k]
+        msg = workhour_get(url,jar)
+        print(f'{k}:{msg}')
