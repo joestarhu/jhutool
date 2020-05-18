@@ -4,10 +4,32 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar,Line,Timeline
 from pyecharts.globals import ThemeType
 from .pjinfo import PJinfo,WorkhourInfo,TestInfo
+from .axure import Axure
 
 @tklc.route('/')
 def main():
     return render_template('home.html',HTML_TITLE='项目管理数据')
+
+@tklc.route('/axure')
+def axure():
+    id = 2
+    a = Axure(id)
+    #print(a.tree)
+    content = node_print(a.tree)
+    return render_template('axure.html',id=id,content=content)
+
+def node_print(tree,msg=None):
+    msg = msg or ''
+    msg += '<ul>'
+    for node in tree:
+        pn = node['pageName']
+        url = node['url']
+        msg += f'<li class="nav-item"><a>{pn}</a><p id={pn} hidden>{url}</p>'
+        if 'children' in node:
+            msg += node_print(node['children'])
+        msg+='</li>'
+    msg += '</ul>'
+    return msg
 
 
 @tklc.route('/testinfo')
