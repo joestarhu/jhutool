@@ -8,6 +8,7 @@ f_path = basedir + '/static/axure/'
 rootNodes = 'rootNodes'
 pageName = 'pageName'
 url = 'url'
+type = 'type'
 children = 'children'
 
 
@@ -68,11 +69,11 @@ class Axure:
         s_id, e_id = self.struct_idx(tree_msg)[0]
         self.tree_msg = tree_msg[s_id + 4:e_id - 1]
 
-    def tree_bulid(self, msg, tree=None):
-        tree = tree or []
+    def tree_bulid(self, msg):
+        tree = []
         lst = self.struct_idx(msg)
         for s, e in lst:
-            print(msg[s:e+1])
+            # print(msg[s+1:e])
             # 把前后的()都给移除掉
             tree.append(self.node_create(msg[s+1:e]))
         return tree
@@ -83,16 +84,21 @@ class Axure:
         """
         node = {}
         d = self.cfg
-        msg = msg.split(',')
-        for i in range(len(msg)):
-            val = msg[i]
-            if d.get(val, val) in [pageName, url]:
-                node[d[val]] = d[msg[i + 1]]
+        msg_lst = msg.split(',')
+        for i in range(len(msg_lst)):
+            val = msg_lst[i]
+            if d.get(val, val) in [pageName, type ,url]:
+                node[d[val]] = d[msg_lst[i + 1]]
+            if d.get(val, val) == children:
+                children_msg = msg[msg.find('['):]
+                node[children] = 'children'
+                s,e = self.struct_idx(children_msg,'[',']')[0]
+                node[children] = self.tree_bulid(children_msg[s+1:e])
+                break
         return node
 
-
 if __name__ == '__main__':
-    a = Axure(2)
+    a = Axure(3)
     print(a.tree)
     # print(a.tree_msg)
     #print(a.cfg)
