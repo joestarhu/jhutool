@@ -1,0 +1,18 @@
+{%extends 'base.html' %}
+{% block content %}
+<h3>上传注意事项:</h3>
+<li>支持Axure生成的文件上传</li>
+<li>请确保你上传的压缩文件格式为zip</li>
+<li>存在同名文件会覆盖</li>
+<hr>
+<form method="post" enctype="multipart/form-data">
+    <input type="file" name="file">
+    <input type="submit" value="上传">
+</form>
+
+{% if ret_msg %}
+  <p style='color:red'>{{ret_msg}}</p>
+{% endif %}
+
+
+{% endblock %}
