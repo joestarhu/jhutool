@@ -14,7 +14,7 @@ def upload():
         ret_msg = f'上传文件:{file.filename}成功'
         try:
             fname = file.filename.split('.zip')[0]
-            file_path = f_path+file.filename
+            file_path = f_path+file.filename.replace(' ','_')
             file.save(file_path)
             # 解压缩文件
             os.system(f'unzip -o -d {f_path} {file_path}')
