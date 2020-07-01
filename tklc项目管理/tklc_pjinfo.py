@@ -93,7 +93,7 @@ class PJinfo:
         for ms in ExlCfg.MS_VAL:
             plan = ms + ExlCfg.COL_MSPLAN
             act = ms + ExlCfg.COL_MSACT
-            delay = ms + ExlCfg.COL_MSDELAY
+            #delay = ms + ExlCfg.COL_MSDELAY
 
             # 找出非日程的row(即这些日程是尚未确定或完成)
             plmsk  = df[plan].apply(str).isin(ExlCfg.SCH_VAL)
@@ -144,12 +144,13 @@ class PJinfo:
             start = datetime(year,month,1)
             end  = datetime(year,month+1,1) if month < 12 else datetime(year+1,1,1)
 
-            msk = (df[ExlCfg.COL_END_ACT] >= start) & (df[ExlCfg.COL_END_ACT] < end)
+            val = df[ExlCfg.COL_END_ACT].astype('datetime64')
+            msk = (val >= start) & (val < end)
             m_df = df[msk]
 
-            for type in ExlCfg.PJTYPE_VAL:
-                cnt = m_df[m_df[ExlCfg.COL_PJTYPE] == type].shape[0]
-                pjtype.loc[month,type] = cnt
+            for t in ExlCfg.PJTYPE_VAL:
+                cnt = m_df[m_df[ExlCfg.COL_PJTYPE] == t].shape[0]
+                pjtype.loc[month,t] = cnt
         return pjtype
 
     def pjhour_get(self) -> pd.DataFrame:
@@ -253,9 +254,23 @@ class PJinfo:
 if __name__ == '__main__':
     p = PJinfo()
     df = p.pjinfo_get()
+    # info[['总工时','业务线','产品','内容范围简介']]
+    # z = info[info['1月total'] > 0.]
+
+    df['实际完结'].astype('datetime64')
+
+    # 需要Excel中所有的日程均是完结的情况下,才可以用这个来计算,否则类型会出错
     pjtype = p.pjytpe_get()
-    pjtype
+    print(pjtype)
 
+    # z[z['内容范围简介']=='线路规划优化']
     hour = p.pjhour_get()
+    hour
     m = p.member_workhour_get()
+    m[6]
 
+    # b = Bar()
+    # b.add_xaxis(pjtype.index.tolist())
+    # for v in pjtype.columns:
+    #     b.add_yaxis(v,pjtype[v].tolist())
+    # b.render()
