@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Cross</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+</head>
+
+<body>
+  <div id="app">
+    <h1>Cross项目平台</h1>
+    <li>在输入框内输入名称,回车点击可进行模糊查询, 点击新建按钮可新建,新建内容为输入框的内容</li>
+    <li>Axure和Sketch请将文件压缩成zip文件,上传</li>
+    <hr>
+    <el-row :gutter="20">
+      <el-col :span='8'>
+        <el-input v-model='query' placeholder='请输入名称进行查询' @change='designInfoGet' clearable></el-input>
+      </el-col>
+      <el-col :span='8'>
+        <el-button type='primary' @click='designCreate' :disabled='query.trim() == ""'>新建版本</el-button>
+      </el-col>
+    </el-row>
+
+    <el-table :data='tbldata' :loading='loading'>
+      <!-- <el-table-column label='ID' prop='id'></el-table-column> -->
+      <el-table-column label='产品名称' prop='name'></el-table-column>
+      <el-table-column label='创建时间' prop='create_time'></el-table-column>
+      <el-table-column label='Axure文档' prop='axure'>
+        <template slot-scope='scope'>
+          <el-row :gutter="2">
+            <el-col :span='4'>
+              <el-button v-show='scope.row.axure !== ""' type='text' size='small' @click='showAxure(scope.row.axure)'>查看</el-button>
+            </el-col>
+            <el-col :span='4'>
+          <el-upload
+          :action="prefix+'/design/upload/axure/'"
+          :data='{id:scope.row.id}'
+          :on-success='uploadOK'
+          :on-error='uploadNG'
+          :file-list='uploadfilelst'
+          ><el-button slot="trigger" size="small" type="text">上传</el-button></el-upload>
+          </el-col>
+          </el-row>
+        </template>
+      </el-table-column>
+      <el-table-column label='Sketch文档' prop='sketch'>
+        <template slot-scope='scope'>
+        <el-row :gutter="2">
+          <el-col :span='4'>
+            <el-button v-show='scope.row.sketch !== ""' type='text' size='small' @click='showAxure(scope.row.sketch)'>查看</el-button>
+          </el-col>
+          <el-col :span='4'>
+            <el-upload
+            :action="prefix+'/design/upload/sketch/'"
+            :data='{id:scope.row.id}'
+            :on-success='uploadOK'
+            :on-error='uploadNG'
+            :file-list='uploadfilelst'
+            ><el-button slot="trigger" size="small" type="text">上传</el-button></el-upload>
+          </el-col>
+          <el-col :span='4'>
+            <el-button type='text' size='small' @click='download(scope.row.id,scope.row.sketch)'>下载</el-button>
+          </el-col>
+        </el-row>
+        </template>
+      </el-table-column>
+      <el-table-column label='操作'>
+        <Template slot-scope='scope'>
+          <el-row>
+            <el-col :span='6'>
+              <el-button type='text' size='small' @click='dialogShow(scope.row.id,scope.row.name)'>删除</el-button>
+            </el-col>
+          </el-row>
+        </Template>
+      </el-table-column>
+    </el-table>
+    <el-pagination layout="total, prev, pager, next" :total="total" @current-change='designInfoGet' :current-page.sync='idx'></el-pagination>
+
+
+    <el-dialog title='删除' :visible.sync="dialogVisable">
+      <p>确认删除:<span v-text='deleteMsg' style='color:red'></span></p>
+      <p>该操作会删除所有上传文件</p>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click='dialogVisable = false'>取 消</el-button>
+        <el-button type="primary" @click='designInfoDel'>确 定</el-button>
+      </span>
+    </el-dialog>
+  </div>
+
+  <script src="https://unpkg.com/vue/dist/vue.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <!-- <script src="https://unpkg.com/vue-router/dist/vue-router.js"></script> -->
+  <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+  <script>
+    let app = new Vue({
+      el: '#app',
+      data: {
+        prefix:'http://axure.unservice.net',
+        // prefix:'http://127.0.0.1:8000',
+        loading: false,
+        query: '',
+
+        tbldata: [],
+        total: 0,
+        idx: 1,
+        size: 10,
+
+        dialogVisable:false,
+        deleteID:'',
+        deleteMsg:'',
+
+        uploadfilelst:[],
+      },
+      methods: {
+        uploadOK(rsp,file,filelist){
+          this.uploadfilelst = []
+          if(rsp.code == 0){
+            this.$notify({duration: 3000, title:'上传成功',message:rsp.msg, type:'success'})
+            this.designInfoGet()
+          }else{
+            this.$notify({duration: 3000, title:'Ops!',message:rsp.msg, type:'warning'})
+          }
+
+        },
+        uploadNG(err,file,filelist){
+          this.uploadfilelst = []
+          this.$notify({duration: 3000, title:'系统错误',message:err, type:'error'})
+        },
+        //新建项目数据
+        designCreate(){
+          let body = {name:this.query}
+          axios.post('/design/',body).then(rsp=>{
+            if(rsp.data.code == 0){
+              this.$notify({duration: 3000, title:'成功',message:'新建版本', type:'success'})
+              this.designInfoGet()
+            }else{
+              this.$notify({duration: 3000, title:'Ops!',message:rsp.data.msg, type:'warning'})
+            }
+          }).catch(err=>{
+            this.$notify({duration: 3000, title:'系统错误',message:err, type:'error'})
+          })
+        },
+        //获取项目管理原型数据
+        designInfoGet() {
+          this.loading = true
+          let query = {idx:this.idx,size:this.size,name:this.query.trim()}
+            axios.get('/design/', {params: query}).then(rsp=>{
+            if(rsp.data.code == 0){
+              this.tbldata = rsp.data.data
+              this.total = rsp.data.total
+            }else{
+                this.$notify({duration: 3000, title:'Ops!',message:rsp.data.msg, type:'warning'})
+            }
+          }).catch(err=>{
+            this.$notify({duration: 3000, title:'系统错误',message:err, type:'error'})
+          })
+          this.loading = false
+        },
+        designInfoDel(){
+            axios.delete('/design/'+this.deleteID).then(rsp=>{
+              if(rsp.data.code == 0){
+                this.$notify({duration: 3000, title:'成功',message:'删除成功', type:'success'})
+                // Idx更新
+                if((this.idx - 1)*this.size >= (this.total-1) && this.idx > 1){
+                  this.idx--
+                }
+                this.designInfoGet()
+              }else{
+                this.$notify({duration: 3000, title:'Ops!',message:rsp.data.msg, type:'warning'})
+              }
+            }).catch(err=>{
+              this.$notify({duration: 3000, title:'系统错误',message:err, type:'error'})
+            })
+            this.dialogVisable= false
+        },
+        dialogShow(id,msg){
+          this.dialogVisable = true
+          this.deleteID = id
+          this.deleteMsg = msg
+        },
+        showAxure(val) {
+          window.open(this.prefix + '/static' + val, "_blank");
+        },
+        download(id,val){
+          axios.get('/design/download/sketch',{params:{id:id,path:val}}).then(rsp=>{
+            val = rsp.data
+            // this.$alert(val)
+            window.open(this.prefix + '/static' + val, "_blank");
+          }).catch(err=>{
+            this.$notify({duration: 3000, title:'系统错误',message:err, type:'error'})
+          })
+        }
+
+
+      },
+      created(){
+        this.designInfoGet()
+      },
+    })
+  </script>
+
+
+</body>
+
+</html>
