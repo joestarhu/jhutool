@@ -2,10 +2,11 @@
 
 '''
 # 模块名称：hmail
-# 模块版本：v1.0.4
+# 模块版本：v1.0.5
 # 功能描述：
  - 支持邮件发送
 # 重要版本变更说明：
+ - 更新附件的代码编写,使其支持正常的文字显示;
  - To/Cc/Bcc的列表拼接采用逗号的形式拼接，原因是原来采用多个To/Cc/Bcc会导致
    在某些邮件客户端上只显示一个To/Cc/Bcc内容.
    比如：Header里面内容如：
@@ -15,7 +16,7 @@
    现在修改变成：
    To:=?utf-8?b?6IOh5YGl?= <huj@citytsm.com>,=?utf-8?b?6IOh5YGl?= <huj@citytsm.com>
    这样就可以显示出2个huj，huj了
-Date:2019-01-10
+Date:2021-07-13
 Author:J.Hu
 '''
 
@@ -27,6 +28,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.utils import formataddr
 from email.header import Header
+
 
 # 默认Timeout，单位：秒
 TIMEOUT = 5
@@ -181,10 +183,11 @@ class Hsmtp():
         def mime_attach(mime, att, attid):
             li = Hattach(att)
             att = MIMEText(open(li.path,'rb').read(), TYPE_BASE_64, self.__encode)
-            att["Content-Type"] = 'application/octet-stream'
-            att["Content-Disposition"] = 'attachment; filename='+li.name
             att.add_header('Content-ID', str(attid))
+            att.add_header('Content-Type','application/octet-stream')
+            att.add_header("Content-Disposition",'attachment',filename=(ENCODE_UTF8,'',li.name))
             mime.attach(att)
+
 
         # Title 设置
         mime['Subject'] = Header(title,self.__encode)
