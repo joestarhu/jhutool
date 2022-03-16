@@ -12,7 +12,8 @@ import pandas as pd
 import requests
 
 # 2021年全国省份
-url = 'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/2021/index.html'
+year = 2021
+url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}/index.html'
 
 
 class RegionLevel(int, Enum):
@@ -47,7 +48,8 @@ def get_url(code: str, href: str, region_lv: RegionLevel) -> str:
     出参:
         url:链接地址
     """
-    url = 'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/2021'
+    global year
+    url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}'
 
     if href == '':
         return href
@@ -126,7 +128,7 @@ def get_province_info(filter: dict, get_lv: RegionLevel = RegionLevel.countytr) 
     filter:过滤器,只读取相对应的内容
     get_lv:获取层级,省,市,县,街道,社区
     """
-    get_lv = RegionLevel.villagetr
+    global url
     infos = [[] for _ in range(get_lv.value)]
     all = get_province_lst(url)
     provincetr_filter = filter[RegionLevel.provincetr]
@@ -153,10 +155,13 @@ if __name__ == '__main__':
     # 嵌套执行 jupyter
     # nest_asyncio.apply()
     filter = dict(zip(RegionLevel, [[] for _ in range(len(RegionLevel))]))
-    filter[RegionLevel.provincetr].append("浙江省")
-    filter[RegionLevel.citytr].append("杭州市")
-    filter[RegionLevel.countytr].append("钱塘区")
-    ret = get_province_info(filter, RegionLevel.villagetr)
+
+    # filter[RegionLevel.provincetr].append("浙江省")
+    # filter[RegionLevel.citytr].append("杭州市")
+    # filter[RegionLevel.countytr].append("钱塘区")
+    # ret = get_province_info(filter, RegionLevel.villagetr)
+    ret = get_province_info(filter)
+    
 
     a1 = pd.DataFrame([[info.name, info.code, info.level]
                        for info in ret[3]], columns=['街道名', '行政区划代码', '行政等级'])
