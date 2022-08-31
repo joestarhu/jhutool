@@ -2,19 +2,16 @@
 """
 国家卫健委获取中高风险地区接口
 Author:Jian.Hu
-Date: 2022-01-10
+Date: 2022-08-31
 """
-
 import time
 import hashlib
 import requests
 import json
-
-# 申请时间
-timestamp = str(int(time.time()))
+import pandas as pd
 
 
-def sha256(x:str) -> str:
+def sha256(x: str) -> str:
     """
     SHA256加密算法
     params:
@@ -23,7 +20,7 @@ def sha256(x:str) -> str:
     return hashlib.sha256(x.encode('UTF-8')).hexdigest().upper()
 
 
-def get_headers(timestamp:str) -> dict:
+def get_headers(timestamp: str) -> dict:
     """
     配置接口headers
     """
@@ -34,7 +31,7 @@ def get_headers(timestamp:str) -> dict:
     return headers
 
 
-def get_bodys(timestamp:str) -> dict:
+def get_bodys(timestamp: str) -> dict:
     """
     配置接口请求参数
     """
@@ -57,7 +54,7 @@ def get_data() -> dict:
     json_body = get_bodys(timestamp)
 
     # 请求数据
-    url = 'http://103.66.32.242:8005/zwfwMovePortal/interface/interfaceJson'
+    url = 'http://bmfw.www.gov.cn/bjww/interface/interfaceJson'
     rsp = requests.post(url, headers=headers, json=json_body)
     rsp.encoding = rsp.apparent_encoding
     return json.loads(rsp.text)
@@ -65,3 +62,24 @@ def get_data() -> dict:
 
 if __name__ == '__main__':
     rsp = get_data()
+    data = rsp['data']
+    data
+    data['end_update_time']
+    data['hcount']
+    data["mcount"]
+
+
+    h = pd.DataFrame(data['highlist'])
+    m = pd.DataFrame(data['middlelist'])
+
+    h[h['province']=='浙江省']
+    m[m['province']=='浙江省']
+
+    h[h['city'] == '杭州市']
+    m[m['city'] == '杭州市']
+    print(h)
+    print(m)
+
+ # 定时更新+自定义更新
+ # 每小时更新一次+自定义更新
+ # 发现新增数据==>启动风险预警==>消息推送
