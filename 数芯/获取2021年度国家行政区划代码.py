@@ -1,24 +1,16 @@
 #!/usr/bin/env python3
+"""获取统计局行政区划代码
 """
-获取统计局行政区划代码
-"""
-import nest_asyncio
+import asyncio
+import aiohttp
+import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from enum import Enum
-import asyncio
-import aiohttp
-import pandas as pd
-import requests
-
-# 2021年全国省份
-year = 2021
-url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}/index.html'
-
 
 class RegionLevel(int, Enum):
-    """
-    1~5分别是省,市,县,街道,社区
+    """中国5级行政区划,省/市/区县/镇街/村社
+       这里的Enum采用了和Html一致的html class名,更改后会造成解析class失败
     """
     provincetr: int = 1
     citytr: int = 2
@@ -26,148 +18,190 @@ class RegionLevel(int, Enum):
     towntr: int = 4
     villagetr: int = 5
 
-
 class RegionInfo(BaseModel):
-    """
-    行政区划数据结构
+    """行政区划数据结构处理
     """
     code: str
     name: str
     level: int
     url: str = ''
 
+    def __init__(__pydantic_self__, year:int, **data: any) -> None:
+        code = data['code']
+        href = data['url']
+        level = data['level']   
 
-def get_url(code: str, href: str, region_lv: RegionLevel) -> str:
-    """
-    简介:
-        通过行政区划代码,和解析出来的超链接,拼接下级行政区划的url地址
-    入参:
-        code:行政区划代码
-        href:解析出来的页面html地址
-        region_lv:行政区划等级
-    出参:
-        url:链接地址
-    """
-    global year
-    url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}'
+        url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}'
 
-    if href == '':
-        return href
+        # 格式化解析出来的URL
+        children_url_format = {
+            # 当前行政区划层级                  # 下级链接数据请求地址
+            RegionLevel.provincetr.value:   f"{url}/{href}",
+            RegionLevel.citytr.value:       f"{url}/{href}",
+            RegionLevel.countytr.value:     f"{url}/{code[:2]}/{href}",
+            RegionLevel.towntr.value:       f"{url}/{code[:2]}/{code[2:4]}/{href}",
+            RegionLevel.villagetr.value:    ""
+        }
+        data['url'] = children_url_format[level]
+        super().__init__(**data)
 
-    rule_lst = [
-        (RegionLevel.provincetr, f"{url}/{href}"),
-        (RegionLevel.citytr, f"{url}/{href}"),
-        (RegionLevel.countytr, f"{url}/{code[:2]}/{href}"),
-        (RegionLevel.towntr, f"{url}/{code[:2]}/{code[2:4]}/{href}")
-    ]
+class Region:
+    def __init__(self, year: int):
+        """设定需要获取的年份数据
+        """
+        self.year = year
 
-    for k, v in rule_lst:
-        if k == region_lv:
-            return v
+    def __region_info(self,soup: BeautifulSoup, region_lv: RegionLevel) -> list:
+        """通过请求返回的html文档,解析出区域信息(代码,名称,下级区域数据请求链接)
+        """
+        results = []
+        year = self.year
 
-    return ''
+        level = region_lv.value
+        # 根据层级名称,解析出行信息(不同层级的行,其class属性不同)
+        for tr in soup.find_all('tr', class_=region_lv.name):
+            tds = tr.find_all('td')         # 根据每行解析出列信息
+            if level == 1:                  # 省级
+                results.extend([RegionInfo(
+                    code = f"{td.a['href'][:-5]}" + '0' * 10,
+                    name = td.a.text,
+                    level = level,
+                    url = td.a['href'],
+                    year = year
+                )for td in tds])
+            else:                           # 省以外层级
+                code = tds[0].text
+                name = tds[-1].text
+                href = tds[0].a['href'] if tds[0].a else ''
+                results.append(RegionInfo(code=code,name=name,url=href,level=level,year=year))
+        return results
 
+    def __get_province_lst(self) -> list[RegionInfo]:
+        """获取全国省份列表
+        """
+        year = self.year
+        url = f'http://www.stats.gov.cn/tjsj/tjbz/tjyqhdmhcxhfdm/{year}/index.html'
 
-async def http_get(url) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0· (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Encoding": "gzip, deflate",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Host": "www.stats.gov.cn",
-        "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2"
-    }
-    try:
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url) as rsp:
-                html = await rsp.text()
-    except Exception as e:
-        print(f'{url}')
-        return None
-    return html
+        with requests.get(url) as rsp:
+            rsp.encoding = rsp.apparent_encoding
+            soup = BeautifulSoup(rsp.text)
+        results = self.__region_info(soup,RegionLevel.provincetr)
+        return results
+    
+    async def http_get(self,url:str) -> str:
+        """异步数据请求
+        Return:
+        --------
+        html: 请求得到的html文本,如果为None代表请求数据失败
+        """
+        html = None
+        headers = {
+            "User-Agent": "Mozilla/5.0· (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Host": "www.stats.gov.cn",
+            "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2"
+        }
 
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url) as rsp:
+                    html = await rsp.text()
+        except Exception as e:
+            print(f'获取:{url}出错')
+        return html
 
-def region_info(soup: BeautifulSoup, region_lv: RegionLevel) -> list:
-    """
-    入参:
-        soup:html文本
-        region_lv:行政等级
-    出参:
-        output:行政区划信息集合
-    """
-    output = []
-    level = region_lv.value
-    for tr in soup.find_all('tr', class_=region_lv.name):
-        tds = tr.find_all('td')
-        if level == 1:  # 获取省列表
-            output.extend([RegionInfo(code=f"{td.a['href'][:-5]}" + '0' * 10, name=td.a.text,
-                                      level=level, url=get_url(td.a['href'][:-5], td.a['href'], region_lv)) for td in tds])
-        else:
-            code = tds[0].text
-            name = tds[-1].text
-            href = tds[0].a['href'] if tds[0].a else ''
-            output.append(RegionInfo(code=code, name=name,
-                                     level=level, url=get_url(code, href, region_lv)))
-    return output
+    def get_region_lst(self,filter:dict = {},get_level:RegionLevel = RegionLevel.villagetr) -> list:
+        """获取地区信息
+        Returns:
+        ---------
+        result[0]:省级-数据集
+        result[1]:市级-数据集
+        result[2]:区县-数据集
+        result[3]:镇街-数据集
+        result[4]:村社-数据集
+        """ 
+        results = [[] for _ in range(RegionLevel.villagetr.value)]
 
+        def filter_data(x,y):
+            """过滤数据
+            """
+            return x if y=='' else [val for val in x if val.name in y]
 
-def get_province_lst(url):
-    """
-    获取省份列表
-    """
-    rsp = requests.get(url)
-    rsp.encoding = rsp.apparent_encoding
-    soup = BeautifulSoup(rsp.text)
-    return region_info(soup, RegionLevel.provincetr)
+        # 默认可下钻层级为市级
+        max_level = RegionLevel.citytr
+        max_level_rule = [
+            # 指定省级,可以下转到区县;指定市级,可以下钻到镇街;指定区县,可以下钻到村社
+            (filter.get(RegionLevel.provincetr,''),   RegionLevel.countytr),
+            (filter.get(RegionLevel.citytr,''),   RegionLevel.towntr),
+            (filter.get(RegionLevel.countytr,''),   RegionLevel.villagetr),
+        ]
 
+        for val,level in max_level_rule:
+            if val:
+                max_level = level
+            else:
+                break
 
-def get_province_info(filter: dict, get_lv: RegionLevel = RegionLevel.countytr) -> list:
-    """
-    获取省市县街道信息
-    filter:过滤器,只读取相对应的内容
-    get_lv:获取层级,省,市,县,街道,社区
-    """
-    global url
-    infos = [[] for _ in range(get_lv.value)]
-    all = get_province_lst(url)
-    provincetr_filter = filter[RegionLevel.provincetr]
+        # 最大下钻层级矫正
+        if max_level.value < get_level.value:
+            get_level = max_level
+            print(f'根据您设定的过滤条件,调整您的搜索层级为:{max_level.name}')
 
-    def get_infos(x, y): return x if len(y) == 0 else [
-        val for val in x if val.name in y]
-    infos[0] = get_infos(all, provincetr_filter)
+        # 获取全国省份数据
+        results[0] = filter_data(self.__get_province_lst(),filter.get(RegionLevel.provincetr,''))
 
-    for i in range(RegionLevel.citytr, get_lv + 1):
-        region_lv = RegionLevel(i)
-        output = []
-        loop = asyncio.get_event_loop()
-        evts = [http_get(info.url)
-                for info in infos[region_lv.value - 2] if info.url != '']
-        result = loop.run_until_complete(asyncio.gather(*evts))
-        for r in result:
-            output.extend(region_info(BeautifulSoup(r), region_lv))
-        lv_filter = filter[region_lv]
-        infos[region_lv.value - 1] = get_infos(output, lv_filter)
-    return infos
+        # 异步获取行政区划数据
+        for i in range(RegionLevel.citytr, get_level + 1):
+            region_lv = RegionLevel(i)
+            region_lst = []
+            loop = asyncio.get_event_loop()
+            evts = [self.http_get(info.url) for info in results[region_lv.value-2] if info.url != '']
+            rsp = loop.run_until_complete(asyncio.gather(*evts))
+            for r in rsp:
+                region_lst.extend(self.__region_info(BeautifulSoup(r), region_lv))
+            # 层级过滤器
+            lv_filter = filter.get(region_lv,'')
+            results[region_lv-1] = filter_data(region_lst,lv_filter)
+        return results
 
 
 if __name__ == '__main__':
-    # 嵌套执行 jupyter
-    # nest_asyncio.apply()
-    filter = dict(zip(RegionLevel, [[] for _ in range(len(RegionLevel))]))
+    import pandas as pd
 
-    # filter[RegionLevel.provincetr].append("浙江省")
-    # filter[RegionLevel.citytr].append("杭州市")
-    # filter[RegionLevel.countytr].append("钱塘区")
-    # ret = get_province_info(filter, RegionLevel.villagetr)
-    ret = get_province_info(filter)
-    
+    filter = dict(zip(RegionLevel, ['' for _ in range(len(RegionLevel))]))
+
+    filter[RegionLevel.provincetr]="上海市"
+    # filter[RegionLevel.citytr]="杭州市"
+    # filter[RegionLevel.countytr]="西湖区"
+    # filter[RegionLevel.towntr] ="林埭镇"
+    # filter[RegionLevel.villagetr]="陇东村"
+
+    a = Region(2022)
+    result = a.get_region_lst(filter)
+    result[0]
+    result[1]
+    result[2]
+
+    len(result[0])
+    len(result[1])
+    len(result[2])
+    len(result[3])
+    len(result[4])
 
     a1 = pd.DataFrame([[info.name, info.code, info.level]
-                       for info in ret[3]], columns=['街道名', '行政区划代码', '行政等级'])
+                       for info in result[0]], columns=['行政区划名', '行政区划代码', '行政等级'])
     a2 = pd.DataFrame([[info.name, info.code, info.level]
-                       for info in ret[4]], columns=['社区名', '行政区划代码', '行政等级'])
+                       for info in result[1]], columns=['行政区划名', '行政区划代码', '行政等级'])
+    a3 = pd.DataFrame([[info.name, info.code, info.level]
+                       for info in result[2]], columns=['行政区划名', '行政区划代码', '行政等级'])
+    a4 = pd.DataFrame([[info.name, info.code, info.level]
+                       for info in result[3]], columns=['行政区划名', '行政区划代码', '行政等级'])
+    a5 = pd.DataFrame([[info.name, info.code, info.level]
+                       for info in result[4]], columns=['行政区划名', '行政区划代码', '行政等级'])
 
-    for idx, code in enumerate(a1['行政区划代码'].str[:-3]):
-        mask = a2['行政区划代码'].str[:-3] == code
-        a2.loc[mask, "街道名"] = a1.iloc[idx]['街道名']
+
+    area = pd.concat([a1, a2, a3])
+    area.to_excel(f'全国_行政区划(省市县不含港澳台).xlsx')
